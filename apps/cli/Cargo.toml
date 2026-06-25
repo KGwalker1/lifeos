@@ -1,0 +1,12 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+
+lifeos-core = { path = "../../crates/lifeos-core" }
+lifeos-storage = { path = "../../crates/lifeos-storage" }
+lifeos-sync = { path = "../../crates/lifeos-sync" }

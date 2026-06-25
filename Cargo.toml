@@ -1,0 +1,10 @@
+[workspace]
+
+members = [
+    "crates/lifeos-core",
+    "crates/lifeos-storage",
+    "crates/lifeos-sync",
+    "apps/cli"
+]
+
+resolver = "2"
