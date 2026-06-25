@@ -14,3 +14,4 @@ mod tests {
 }
 pub mod models;
 pub mod ids;
+pub mod sync_state;

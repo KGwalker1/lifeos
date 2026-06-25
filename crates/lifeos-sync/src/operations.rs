@@ -10,6 +10,8 @@ pub fn create_event(
 ) -> ChangeLog {
 
     ChangeLog {
+    
+        sequence: 0,
 
         operation_id: Uuid::new_v4(),
 

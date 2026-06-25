@@ -33,7 +33,9 @@ pub fn init_db() -> Connection {
         "
         CREATE TABLE IF NOT EXISTS changelog (
 
-            operation_id TEXT PRIMARY KEY,
+            sequence INTEGER PRIMARY KEY AUTOINCREMENT,       
+
+            operation_id TEXT UNIQUE NOT NULL,
 
             device_id TEXT NOT NULL,
 
@@ -42,11 +44,27 @@ pub fn init_db() -> Connection {
             operation TEXT NOT NULL,
 
             timestamp TEXT NOT NULL
+            
+
         )
         ",
         [],
     )
     .unwrap();
+
+    conn.execute(
+    "
+    CREATE TABLE IF NOT EXISTS sync_state (
+
+        device_id TEXT PRIMARY KEY,
+
+        last_seen_operation TEXT,
+
+        last_seen_sequence INTEGER NOT NULL
+    )
+    ",
+    [],
+    ).unwrap();
 
     // Ensure existing databases get the new columns when upgrading
     let _ = conn.execute(

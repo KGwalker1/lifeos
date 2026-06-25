@@ -24,4 +24,6 @@ pub struct ChangeLog {
     pub operation: OperationType,
 
     pub timestamp: DateTime<Utc>,
+
+    pub sequence: i64,
 }

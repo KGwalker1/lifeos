@@ -16,6 +16,8 @@ use lifeos_sync::changelog::{
 
 use lifeos_sync::operations::create_event;
 
+use lifeos_core::sync_state::SyncState;
+
 pub struct Repository {
     pub conn: Connection,
 }
@@ -296,13 +298,14 @@ impl Repository {
             self.conn.prepare(
                 "
                 SELECT
+                    sequence,
                     operation_id,
                     device_id,
                     entity_id,
                     operation,
                     timestamp
                 FROM changelog
-                ORDER BY timestamp ASC
+                ORDER BY sequence ASC
                 "
             )?;
 
@@ -312,35 +315,38 @@ impl Repository {
                 |row| {
 
                     let operation: String =
-                        row.get(3)?;
+                        row.get(4)?;
 
                     let timestamp: String =
-                        row.get(4)?;
+                        row.get(5)?;
 
                     Ok(ChangeLog {
 
-                        operation_id:
-                            Uuid::parse_str(
-                                &row.get::<_, String>(0)?
-                            )
-                            .unwrap(),
+                         sequence:
+                            row.get(0)?,
 
-                        device_id:
+                        operation_id:
                             Uuid::parse_str(
                                 &row.get::<_, String>(1)?
                             )
                             .unwrap(),
 
-                        entity_id:
+                        device_id:
                             Uuid::parse_str(
                                 &row.get::<_, String>(2)?
+                            )
+                            .unwrap(),
+
+                        entity_id:
+                            Uuid::parse_str(
+                                &row.get::<_, String>(3)?
                             )
                             .unwrap(),
 
                         operation:
                             match operation.as_str() {
 
-                                "create" =>
+                                "reate" =>
                                     OperationType::Create,
 
                                 "update" =>
@@ -365,6 +371,92 @@ impl Repository {
 
         rows.collect()
     }
+
+
+    pub fn get_changes_after(
+    &self,
+    sequence: i64,
+) -> Result<Vec<ChangeLog>> {
+
+    let mut stmt =
+        self.conn.prepare(
+            "
+            SELECT
+                sequence,
+                operation_id,
+                device_id,
+                entity_id,
+                operation,
+                timestamp
+            FROM changelog
+            WHERE sequence > ?1
+            ORDER BY sequence ASC
+            "
+        )?;
+
+    let rows =
+        stmt.query_map(
+            [sequence],
+            |row| {
+
+                let operation: String =
+                    row.get(4)?;
+
+                let timestamp: String =
+                    row.get(5)?;
+
+                Ok(ChangeLog {
+
+                    sequence:
+                        row.get(0)?,
+
+                    operation_id:
+                        Uuid::parse_str(
+                            &row.get::<_, String>(1)?
+                        )
+                        .unwrap(),
+
+                    device_id:
+                        Uuid::parse_str(
+                            &row.get::<_, String>(2)?
+                        )
+                        .unwrap(),
+
+                    entity_id:
+                        Uuid::parse_str(
+                            &row.get::<_, String>(3)?
+                        )
+                        .unwrap(),
+
+                    operation:
+                        match operation.as_str() {
+
+                            "Create" =>
+                                OperationType::Create,
+
+                            "Update" =>
+                                OperationType::Update,
+
+                            "Delete" =>
+                                OperationType::Delete,
+
+                            _ =>
+                                OperationType::Update,
+                        },
+
+                    timestamp:
+                        DateTime::parse_from_rfc3339(
+                            &timestamp
+                        )
+                        .unwrap()
+                        .into(),
+                })
+            },
+        )?;
+
+    rows.collect()
+}
+
 
     // =====================================================
     // GET ALL ENTRIES
@@ -440,4 +532,81 @@ impl Repository {
 
         rows.collect()
     }
+
+
+pub fn get_sync_state(
+    &self,
+    device_id: Uuid,
+) -> Result<Option<SyncState>> {
+
+    let mut stmt =
+        self.conn.prepare(
+            "
+            SELECT
+                device_id,
+                last_seen_operation,
+                last_seen_sequence
+            FROM sync_state
+            WHERE device_id=?1
+            "
+        )?;
+
+    let mut rows =
+        stmt.query([
+            device_id.to_string()
+        ])?;
+
+    if let Some(row) =
+        rows.next()?
+    {
+
+        return Ok(Some(
+            SyncState {
+
+                device_id:
+                    Uuid::parse_str(
+                        &row.get::<_, String>(0)?
+                    )
+                    .unwrap(),
+
+                last_seen_operation:
+                    row.get::<_, Option<String>>(1)?
+                        .map(|s| Uuid::parse_str(&s).unwrap()),
+
+                last_seen_sequence:
+                    row.get(2)?
+            }
+        ));
+    }
+
+    Ok(None)
+}
+
+pub fn save_sync_state(
+    &self,
+    state: &SyncState,
+) -> Result<()> {
+
+    self.conn.execute(
+        "
+        INSERT OR REPLACE
+        INTO sync_state
+        (
+            device_id,
+            last_seen_operation,
+            last_seen_sequence
+        )
+        VALUES
+        (?1, ?2, ?3)
+        ",
+        params![
+            state.device_id.to_string(),
+            state.last_seen_operation
+                .map(|op| op.to_string()),
+            state.last_seen_sequence,
+        ],
+    )?;
+
+    Ok(())
+}
 }
