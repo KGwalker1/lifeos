@@ -17,7 +17,7 @@ fn main() {
     println!("Starting LifeOS Sync Engine Test");
     println!("=================================");
 
-    let conn = init_db();
+    let conn = init_db("lifeos.db");
 
     let repo = Repository::new(conn);
 

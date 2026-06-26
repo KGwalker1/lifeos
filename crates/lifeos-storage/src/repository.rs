@@ -346,7 +346,7 @@ impl Repository {
                         operation:
                             match operation.as_str() {
 
-                                "reate" =>
+                                "create" =>
                                     OperationType::Create,
 
                                 "update" =>
@@ -431,18 +431,14 @@ impl Repository {
                     operation:
                         match operation.as_str() {
 
-                            "Create" =>
-                                OperationType::Create,
+    "create" => OperationType::Create,
 
-                            "Update" =>
-                                OperationType::Update,
+    "update" => OperationType::Update,
 
-                            "Delete" =>
-                                OperationType::Delete,
+    "delete" => OperationType::Delete,
 
-                            _ =>
-                                OperationType::Update,
-                        },
+    _ => OperationType::Update,
+},
 
                     timestamp:
                         DateTime::parse_from_rfc3339(
@@ -606,6 +602,144 @@ pub fn save_sync_state(
             state.last_seen_sequence,
         ],
     )?;
+
+    Ok(())
+}
+
+pub fn operation_exists(
+    &self,
+    operation_id: Uuid,
+) -> rusqlite::Result<bool> {
+
+    let mut stmt = self.conn.prepare(
+        "
+        SELECT COUNT(*)
+        FROM changelog
+        WHERE operation_id = ?1
+        "
+    )?;
+
+    let count: i64 = stmt.query_row(
+        [operation_id.to_string()],
+        |row| row.get(0),
+    )?;
+
+    Ok(count > 0)
+}
+
+// =====================================================
+// SAVE REMOTE CHANGE
+// =====================================================
+
+pub fn save_remote_change(
+    &self,
+    change: &ChangeLog,
+) -> Result<()> {
+
+    let operation = match change.operation {
+
+        OperationType::Create => "create",
+
+        OperationType::Update => "update",
+
+        OperationType::Delete => "delete",
+    };
+
+    self.conn.execute(
+        "
+        INSERT INTO changelog
+        (
+            operation_id,
+            device_id,
+            entity_id,
+            operation,
+            timestamp
+        )
+        VALUES
+        (?1, ?2, ?3, ?4, ?5)
+        ",
+        params![
+            change.operation_id.to_string(),
+            change.device_id.to_string(),
+            change.entity_id.to_string(),
+            operation,
+            change.timestamp.to_rfc3339(),
+        ],
+    )?;
+
+    Ok(())
+}
+
+// =====================================================
+// APPLY REMOTE CREATE
+// =====================================================
+
+pub fn apply_remote_create(
+    &self,
+    entry: &Entry,
+    change: &ChangeLog,
+) -> Result<()> {
+
+    let tx = self.conn.unchecked_transaction()?;
+
+    tx.execute(
+        "
+        INSERT INTO entries
+        (
+            id,
+            version,
+            device_id,
+            title,
+            content,
+            created_at,
+            updated_at
+        )
+        VALUES
+        (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        ",
+        params![
+            entry.id.to_string(),
+            entry.version,
+            entry.device_id.to_string(),
+            &entry.title,
+            &entry.content,
+            entry.created_at.to_rfc3339(),
+            entry.updated_at.to_rfc3339(),
+        ],
+    )?;
+
+    let operation = match change.operation {
+
+        OperationType::Create => "create",
+
+        OperationType::Update => "update",
+
+        OperationType::Delete => "delete",
+    };
+
+    tx.execute(
+        "
+        INSERT INTO changelog
+        (
+            operation_id,
+            device_id,
+            entity_id,
+            operation,
+            timestamp
+        )
+        VALUES
+        (?1, ?2, ?3, ?4, ?5)
+        ",
+        params![
+            change.operation_id.to_string(),
+            change.device_id.to_string(),
+            change.entity_id.to_string(),
+            operation,
+            change.timestamp.to_rfc3339(),
+        ],
+    )?;
+
+    tx.commit()?;
 
     Ok(())
 }

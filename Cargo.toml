@@ -4,7 +4,9 @@ members = [
     "crates/lifeos-core",
     "crates/lifeos-storage",
     "crates/lifeos-sync",
-    "apps/cli"
+
+    "apps/cli",
+    "apps/server",
 ]
 
 resolver = "2"

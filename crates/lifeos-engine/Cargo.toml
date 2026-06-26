@@ -1,0 +1,13 @@
+[package]
+name = "lifeos-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lifeos-core = { path = "../lifeos-core" }
+lifeos-storage = { path = "../lifeos-storage" }
+lifeos-sync = { path = "../lifeos-sync" }
+
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
