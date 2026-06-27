@@ -18,6 +18,8 @@ use lifeos_sync::operations::create_event;
 
 use lifeos_core::sync_state::SyncState;
 
+use crate::errors::RepositoryError;
+
 pub struct Repository {
     pub conn: Connection,
 }
@@ -745,55 +747,103 @@ pub fn apply_remote_update(
     &self,
     entry: &Entry,
     change: &ChangeLog,
-) -> Result<()> {
+) -> Result<(), RepositoryError> {
 
+    // ---------------------------------
+    // Load current entry
+    // ---------------------------------
+
+    let current = self
+        .get_entry(&entry.id.to_string())
+        .map_err(|_| RepositoryError::EntryNotFound)?;
+
+    // ---------------------------------
+    // Version conflict detection
+    // ---------------------------------
+
+    if entry.version <= current.version {
+
+        return Err(
+            RepositoryError::VersionConflict
+        );
+    }
+
+    // ---------------------------------
+    // Begin transaction
+    // ---------------------------------
 
     let tx =
         self.conn.unchecked_transaction()?;
 
-
-   let updated =
-    tx.execute(
-        "
-        UPDATE entries
-        SET
-            version=?1,
-            title=?2,
-            content=?3,
-            updated_at=?4
-        WHERE id=?5
-        ",
-        params![
-
-            entry.version,
-
-            &entry.title,
-
-            &entry.content,
-
-            entry.updated_at.to_rfc3339(),
-
-            entry.id.to_string(),
-
-        ],
-    )?;
-
+    let updated =
+        tx.execute(
+            "
+            UPDATE entries
+            SET
+                version=?1,
+                title=?2,
+                content=?3,
+                updated_at=?4
+            WHERE id=?5
+            ",
+            params![
+                entry.version,
+                &entry.title,
+                &entry.content,
+                entry.updated_at.to_rfc3339(),
+                entry.id.to_string(),
+            ],
+        )?;
 
     if updated == 0 {
 
-    return Err(
-        rusqlite::Error::QueryReturnedNoRows
-    );
-}
+        return Err(
+            RepositoryError::EntryNotFound
+        );
+    }
 
     Self::save_remote_change(
         &tx,
         change,
     )?;
 
-
     tx.commit()?;
 
+    Ok(())
+}
+
+pub fn apply_remote_delete(
+    &self,
+    change: &ChangeLog,
+) -> Result<(), RepositoryError> {
+
+    let tx =
+        self.conn.unchecked_transaction()?;
+
+    let deleted =
+        tx.execute(
+            "
+            DELETE FROM entries
+            WHERE id = ?1
+            ",
+            params![
+                change.entity_id.to_string()
+            ],
+        )?;
+
+    if deleted == 0 {
+
+        return Err(
+            RepositoryError::EntryNotFound
+        );
+    }
+
+    Self::save_remote_change(
+        &tx,
+        change,
+    )?;
+
+    tx.commit()?;
 
     Ok(())
 }
