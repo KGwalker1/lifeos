@@ -415,6 +415,7 @@ dependencies = [
  "lifeos-core",
  "lifeos-storage",
  "lifeos-sync",
+ "rusqlite",
  "serde",
  "uuid",
 ]
@@ -599,6 +600,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11438310b19e3109b6446c33d1ed5e889428cf2e278407bc7896bc4aaea43323"
 dependencies = [
  "bitflags",
+ "chrono",
  "fallible-iterator",
  "fallible-streaming-iterator",
  "hashlink",

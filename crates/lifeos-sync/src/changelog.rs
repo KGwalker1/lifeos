@@ -2,7 +2,7 @@ use chrono::{DateTime,Utc};
 use serde::{Serialize,Deserialize};
 use uuid::Uuid;
 
-#[derive(Debug,Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize, PartialEq)]
 pub enum OperationType {
 
     Create,

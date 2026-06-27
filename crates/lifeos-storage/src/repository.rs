@@ -632,7 +632,7 @@ pub fn operation_exists(
 // =====================================================
 
 pub fn save_remote_change(
-    &self,
+    tx: &rusqlite::Transaction,
     change: &ChangeLog,
 ) -> Result<()> {
 
@@ -645,7 +645,8 @@ pub fn save_remote_change(
         OperationType::Delete => "delete",
     };
 
-    self.conn.execute(
+
+    tx.execute(
         "
         INSERT INTO changelog
         (
@@ -659,17 +660,23 @@ pub fn save_remote_change(
         (?1, ?2, ?3, ?4, ?5)
         ",
         params![
+
             change.operation_id.to_string(),
+
             change.device_id.to_string(),
+
             change.entity_id.to_string(),
+
             operation,
+
             change.timestamp.to_rfc3339(),
+
         ],
     )?;
 
+
     Ok(())
 }
-
 // =====================================================
 // APPLY REMOTE CREATE
 // =====================================================
@@ -680,7 +687,9 @@ pub fn apply_remote_create(
     change: &ChangeLog,
 ) -> Result<()> {
 
-    let tx = self.conn.unchecked_transaction()?;
+    let tx =
+        self.conn.unchecked_transaction()?;
+
 
     tx.execute(
         "
@@ -698,48 +707,93 @@ pub fn apply_remote_create(
         (?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ",
         params![
+
             entry.id.to_string(),
+
             entry.version,
+
             entry.device_id.to_string(),
+
             &entry.title,
+
             &entry.content,
+
             entry.created_at.to_rfc3339(),
+
             entry.updated_at.to_rfc3339(),
+
         ],
     )?;
 
-    let operation = match change.operation {
 
-        OperationType::Create => "create",
-
-        OperationType::Update => "update",
-
-        OperationType::Delete => "delete",
-    };
-
-    tx.execute(
-        "
-        INSERT INTO changelog
-        (
-            operation_id,
-            device_id,
-            entity_id,
-            operation,
-            timestamp
-        )
-        VALUES
-        (?1, ?2, ?3, ?4, ?5)
-        ",
-        params![
-            change.operation_id.to_string(),
-            change.device_id.to_string(),
-            change.entity_id.to_string(),
-            operation,
-            change.timestamp.to_rfc3339(),
-        ],
+    Self::save_remote_change(
+        &tx,
+        change,
     )?;
+
 
     tx.commit()?;
+
+
+    Ok(())
+}
+// =====================================================
+// APPLY REMOTE UPDATE
+// =====================================================
+
+pub fn apply_remote_update(
+    &self,
+    entry: &Entry,
+    change: &ChangeLog,
+) -> Result<()> {
+
+
+    let tx =
+        self.conn.unchecked_transaction()?;
+
+
+   let updated =
+    tx.execute(
+        "
+        UPDATE entries
+        SET
+            version=?1,
+            title=?2,
+            content=?3,
+            updated_at=?4
+        WHERE id=?5
+        ",
+        params![
+
+            entry.version,
+
+            &entry.title,
+
+            &entry.content,
+
+            entry.updated_at.to_rfc3339(),
+
+            entry.id.to_string(),
+
+        ],
+    )?;
+
+
+    if updated == 0 {
+
+    return Err(
+        rusqlite::Error::QueryReturnedNoRows
+    );
+}
+
+    Self::save_remote_change(
+        &tx,
+        change,
+    )?;
+
+
+    tx.commit()?;
+
 
     Ok(())
 }
