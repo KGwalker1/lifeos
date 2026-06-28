@@ -5,17 +5,22 @@ use lifeos_storage::repository::Repository;
 use lifeos_sync::api::{
     PushRequest,
     PushResponse,
+    PullRequest,
+    PullResponse,
 };
 
 use crate::{
     error::SyncError,
     validator::Validator,
+    processor::Processor,
+    pull_processor::PullProcessor,
 };
 
-use crate::processor::Processor;
-
 pub struct SyncEngine {
-    repository: Arc<Mutex<Repository>>,
+
+    processor: Processor,
+
+    pull_processor: PullProcessor,
 }
 
 impl SyncEngine {
@@ -24,28 +29,58 @@ impl SyncEngine {
         repository: Arc<Mutex<Repository>>,
     ) -> Self {
 
+        let processor =
+            Processor::new(
+                repository.clone()
+            );
+
+        let pull_processor =
+            PullProcessor::new(
+                repository.clone()
+            );
+
         Self {
-            repository,
+
+            processor,
+
+            pull_processor,
         }
     }
 
-pub fn apply_push(
-    &self,
-    request: PushRequest,
-) -> Result<PushResponse, SyncError> {
+    // =====================================================
+    // APPLY PUSH
+    // =====================================================
 
-    Validator::validate_push(&request)?;
+    pub fn apply_push(
+        &self,
+        request: PushRequest,
+    ) -> Result<PushResponse, SyncError> {
 
-    let processor =
-        Processor::new(self.repository.clone());
+        Validator::validate_push(&request)?;
 
-    processor.process_push(&request)?;
+        self.processor
+            .process_push(&request)?;
 
-    Ok(PushResponse {
+        Ok(
+            PushResponse {
 
-        success: true,
+                success: true,
 
-        latest_sequence: 0,
-    })
-}
+                latest_sequence: 0,
+            }
+        )
+    }
+
+    // =====================================================
+    // PROCESS PULL
+    // =====================================================
+
+    pub fn process_pull(
+        &self,
+        request: PullRequest,
+    ) -> Result<PullResponse, SyncError> {
+
+        self.pull_processor
+            .process_pull(&request)
+    }
 }

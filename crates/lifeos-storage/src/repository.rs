@@ -18,6 +18,8 @@ use lifeos_sync::operations::create_event;
 
 use lifeos_core::sync_state::SyncState;
 
+use std::collections::HashSet;
+
 use crate::errors::RepositoryError;
 
 pub struct Repository {
@@ -455,6 +457,53 @@ impl Repository {
     rows.collect()
 }
 
+
+// =====================================================
+// GET ENTRIES FOR CHANGES
+// =====================================================
+
+pub fn get_entries_for_changes(
+    &self,
+    changes: &[ChangeLog],
+) -> Result<Vec<Entry>> {
+
+    let mut entries =
+        Vec::new();
+
+    let mut seen =
+        HashSet::new();
+
+    for change in changes {
+
+        match change.operation {
+
+            OperationType::Delete => {
+
+                // Deleted entries are not returned.
+                continue;
+            }
+
+            OperationType::Create
+            | OperationType::Update => {
+
+                // Skip duplicates.
+                if !seen.insert(change.entity_id) {
+                    continue;
+                }
+
+                if let Ok(entry) =
+                    self.get_entry(
+                        &change.entity_id.to_string()
+                    )
+                {
+                    entries.push(entry);
+                }
+            }
+        }
+    }
+
+    Ok(entries)
+}
 
     // =====================================================
     // GET ALL ENTRIES
